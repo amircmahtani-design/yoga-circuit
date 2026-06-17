@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
   ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check, RotateCw,
-  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2
+  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2, Sparkles
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
 
@@ -87,6 +87,10 @@ export default function App() {
   const [addDur, setAddDur] = useState(30);
   const [toast, setToast] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genBase, setGenBase] = useState("balanced");
+  const [genCount, setGenCount] = useState(8);
+  const [genRest, setGenRest] = useState(0);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -99,11 +103,18 @@ export default function App() {
       const seedV = await store.get("yoga:seed");
       if (seedV !== SEED_VERSION) {
         cards = cards.filter((c) => !c.demo && !c.sample);
-        const demo = DECK.map((d) => ({ id: uid(), name: d.name, src: imgUrl(d.img), group: d.group, demo: true }));
+        const demo = DECK.map((d) => ({ id: uid(), name: d.name, src: imgUrl(d.img), group: d.group, intensity: d.lvl, demo: true }));
         cards = [...demo, ...cards];
         await store.set("yoga:seed", SEED_VERSION);
         await persistLibrary(cards);
       }
+      let patched = false;
+      cards = cards.map((c) => {
+        if (c.intensity) return c;
+        const hit = DECK.find((d) => typeof c.src === "string" && c.src.indexOf(d.img) !== -1);
+        patched = true; return { ...c, intensity: hit ? hit.lvl : 2 };
+      });
+      if (patched) await persistLibrary(cards);
       setLibrary(cards);
       const sc = await store.get("yoga:circuit"); if (sc) setCircuit(sc);
       setLoading(false);
@@ -140,6 +151,32 @@ export default function App() {
 
   const addToCircuit = (cardId, duration = null) => setCircuit((c) => [...c, { iid: uid(), cardId, duration }]);
   function openAdd(id) { setAddDur(holdDefault || 30); setAddFor(id); }
+  function setIntensity(id, lvl) { const next = library.map((c) => (c.id === id ? { ...c, intensity: lvl } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
+  function openGen() { setGenRest(restDur); setGenOpen(true); }
+  function doGenerate(mode) {
+    const pool = library.filter((c) => c.src);
+    if (!pool.length) { setGenOpen(false); return; }
+    const w = (lvl) => { if (genBase === "gentle") return lvl === 1 ? 3 : lvl === 2 ? 1.5 : 0.4; if (genBase === "strong") return lvl === 3 ? 3 : lvl === 2 ? 1.5 : 0.4; if (genBase === "mixed") return 1; return lvl === 2 ? 3 : 1.6; };
+    let items = pool.map((c) => ({ c, lvl: c.intensity || 2 }));
+    const picked = []; const n = Math.min(genCount, items.length);
+    for (let k = 0; k < n; k++) {
+      const weights = items.map((x) => Math.max(0.01, w(x.lvl)));
+      const total = weights.reduce((a, b) => a + b, 0);
+      let r = Math.random() * total, idx = 0;
+      for (; idx < items.length; idx++) { r -= weights[idx]; if (r <= 0) break; }
+      idx = Math.min(idx, items.length - 1);
+      picked.push(items[idx]); items.splice(idx, 1);
+    }
+    picked.sort((a, b) => a.lvl - b.lvl);
+    const up = [], down = []; picked.forEach((x, i) => (i % 2 === 0 ? up : down).push(x));
+    const arc = [...up, ...down.reverse()];
+    const holdFor = (lvl) => (lvl === 1 ? 45 : lvl === 3 ? 20 : 30);
+    const circ = arc.map((x) => ({ iid: uid(), cardId: x.c.id, duration: holdFor(x.lvl) }));
+    setRestDur(genRest);
+    setCircuit((cur) => (mode === "add" ? [...cur, ...circ] : circ));
+    setToast(mode === "add" ? "Added " + circ.length + " poses" : "Workout created");
+    setGenOpen(false);
+  }
   const removeFromCircuit = (iid) => setCircuit((c) => c.filter((x) => x.iid !== iid));
   const move = (iid, dir) => setCircuit((c) => { const i = c.findIndex((x) => x.iid === iid); const j = i + dir; if (i < 0 || j < 0 || j >= c.length) return c; const n = [...c]; [n[i], n[j]] = [n[j], n[i]]; return n; });
   const setItemDur = (iid, val) => setCircuit((c) => c.map((x) => (x.iid === iid ? { ...x, duration: val } : x)));
@@ -248,7 +285,7 @@ export default function App() {
                   <GroupHeader g={g} count={cardsIn(g.key).length} />
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                     {cardsIn(g.key).map((c, i) => (
-                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} openAdd={openAdd} />
+                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} openAdd={openAdd} setIntensity={setIntensity} />
                     ))}
                   </div>
                 </section>
@@ -259,16 +296,22 @@ export default function App() {
           {/* ---------------- BUILD ---------------- */}
           {tab === "build" && (
             <section className="fadeUp">
-              <div className="flex items-end justify-between mb-4">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="cz text-2xl" style={titleStyle}>Your circuit</h2>
-                {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear all</button>}
+                <div className="flex items-center gap-3">
+                  <button onClick={openGen} className="press h-9 px-3.5 rounded-full text-sm font-semibold flex items-center gap-1.5" style={{ background: C.coral, color: "#fff", boxShadow: "0 4px 12px rgba(207,106,76,.35)" }}><Sparkles size={15} /> Create</button>
+                  {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear</button>}
+                </div>
               </div>
 
               {circuit.length === 0 ? (
                 <div className="rounded-2xl py-14 px-6 text-center" style={{ border: `1.5px dashed ${C.line}`, background: "rgba(255,255,255,.4)" }}>
                   <div className="rounded-2xl inline-flex p-3 mb-3" style={{ background: "rgba(207,106,76,.12)", color: C.coralDeep }}><ListChecks size={22} /></div>
                   <p className="text-sm mb-4" style={{ color: C.sub }}>Your circuit is empty.</p>
-                  <button onClick={() => setTab("cards")} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-semibold" style={{ background: C.coral, color: "#fff" }}><LayoutGrid size={16} /> Add poses from Cards</button>
+                  <div className="flex flex-col items-center gap-2.5">
+                    <button onClick={openGen} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-bold" style={{ background: C.coral, color: "#fff" }}><Sparkles size={16} /> Create a workout</button>
+                    <button onClick={() => setTab("cards")} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-semibold" style={{ background: "#eadfce", color: C.ink }}><LayoutGrid size={16} /> Add poses from Cards</button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -354,6 +397,42 @@ export default function App() {
         })()}
 
         {toast && (<div className="fixed left-1/2 z-[80] px-4 py-2.5 rounded-full text-sm font-semibold fadeUp" style={{ bottom: 96, transform: "translateX(-50%)", background: C.ink, color: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,.3)" }}>{toast} ✓</div>)}
+
+        {genOpen && (
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: "rgba(20,22,15,.55)" }} onClick={() => setGenOpen(false)}>
+            <div className="w-full max-w-sm m-3 rounded-3xl p-5 fadeUp" style={{ background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,.4)" }} onClick={(e) => e.stopPropagation()}>
+              <div className="cz text-xl" style={{ color: C.ink }}>Create a workout</div>
+              <div className="text-xs mb-4" style={{ color: C.faint }}>Builds a circuit from your deck.</div>
+              <div className="text-sm font-medium mb-2" style={{ color: C.ink }}>Intensity</div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[["gentle", "Gentle"], ["balanced", "Balanced"], ["strong", "Strong"], ["mixed", "Surprise"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setGenBase(v)} className="press h-10 px-4 rounded-full text-sm font-semibold" style={genBase === v ? { background: C.coral, color: "#fff" } : { background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}>{l}</button>
+                ))}
+              </div>
+              <div className="text-sm font-medium mb-2" style={{ color: C.ink }}>Number of poses</div>
+              <div className="flex items-center justify-center gap-5 mb-4">
+                <button onClick={() => setGenCount((n) => Math.max(3, n - 1))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Minus size={18} /></button>
+                <div className="cz text-3xl" style={{ color: C.ink, minWidth: 60, textAlign: "center" }}>{genCount}</div>
+                <button onClick={() => setGenCount((n) => Math.min(30, n + 1))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Plus size={18} /></button>
+              </div>
+              <div className="text-sm font-medium mb-2" style={{ color: C.ink }}>Rest between poses</div>
+              <div className="flex flex-wrap gap-2 mb-5">
+                {[[0, "Off"], [5, "5s"], [10, "10s"], [15, "15s"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setGenRest(v)} className="press h-10 px-4 rounded-full text-sm font-semibold" style={genRest === v ? { background: C.coral, color: "#fff" } : { background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}>{l}</button>
+                ))}
+              </div>
+              {circuit.length > 0 ? (
+                <div className="flex gap-3">
+                  <button onClick={() => doGenerate("add")} className="press flex-1 h-12 rounded-full font-semibold" style={{ background: "#eadfce", color: C.ink }}>Add to circuit</button>
+                  <button onClick={() => doGenerate("replace")} className="press flex-1 h-12 rounded-full font-bold" style={{ background: C.coral, color: "#fff" }}>Replace</button>
+                </div>
+              ) : (
+                <button onClick={() => doGenerate("replace")} className="press w-full h-12 rounded-full font-bold" style={{ background: C.coral, color: "#fff" }}>Create workout</button>
+              )}
+              <button onClick={() => setGenOpen(false)} className="press w-full h-11 mt-2 rounded-full font-semibold" style={{ background: "transparent", color: C.sub }}>Cancel</button>
+            </div>
+          </div>
+        )}
         {queue.length > 0 && <CropEditor files={queue} onComplete={(cards) => { commitCards(cards); setQueue([]); }} onCancel={() => setQueue([])} />}
       </div>
     </>
@@ -384,7 +463,8 @@ function GroupHeader({ g, count, small }) {
     </div>
   );
 }
-function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard, openAdd }) {
+function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard, openAdd, setIntensity }) {
+  const lvl = c.intensity || 2;
   return (
     <div className="rounded-2xl overflow-hidden relative pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)", animationDelay: `${Math.min(i, 12) * 30}ms` }}>
       <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative", overflow: "hidden" }}>
@@ -393,16 +473,29 @@ function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, de
         <button onClick={() => openAdd(c.id)} aria-label="Add to circuit" className="press absolute top-2 right-2 p-2.5 rounded-full" style={{ background: C.coral, color: "#fff", boxShadow: "0 2px 10px rgba(207,106,76,.55)" }}><Plus size={16} /></button>
       </div>
       {editId === c.id ? (
-        <div className="p-2 flex items-center gap-1.5">
-          <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveName(c.id)} className="w-full text-sm px-2 py-1 rounded-lg outline-none" style={{ border: `1px solid ${C.coral}`, background: "#fff", color: C.ink }} />
-          <button onClick={() => saveName(c.id)} aria-label="Save name" className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
-          <button onClick={() => deleteCard(c.id)} aria-label="Delete card" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.coralDeep }}><Trash2 size={14} /></button>
+        <div className="p-2">
+          <div className="flex items-center gap-1.5 mb-2">
+            <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveName(c.id)} className="w-full text-sm px-2 py-1 rounded-lg outline-none" style={{ border: `1px solid ${C.coral}`, background: "#fff", color: C.ink }} />
+            <button onClick={() => saveName(c.id)} aria-label="Save name" className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
+            <button onClick={() => deleteCard(c.id)} aria-label="Delete card" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.coralDeep }}><Trash2 size={14} /></button>
+          </div>
+          <div className="flex items-center justify-center gap-2 pb-1">
+            <span className="text-[10px] uppercase tracking-wide" style={{ color: C.faint }}>Level</span>
+            {[1, 2, 3].map((l) => (
+              <button key={l} onClick={() => setIntensity(c.id, l)} aria-label={`Intensity ${l}`} className="press" style={{ width: 15, height: 15, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />
+            ))}
+          </div>
         </div>
       ) : (
-        <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="w-full px-2.5 py-2.5 flex items-center justify-center gap-1.5">
-          <span className="cz text-[12px] text-center truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{c.name}</span>
-          <Pencil size={11} style={{ color: C.faint, flexShrink: 0 }} />
-        </button>
+        <div className="px-2.5 py-2">
+          <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="w-full flex items-center justify-center gap-1.5">
+            <span className="cz text-[12px] text-center truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{c.name}</span>
+            <Pencil size={11} style={{ color: C.faint, flexShrink: 0 }} />
+          </button>
+          <div className="flex items-center justify-center gap-1 mt-1.5">
+            {[1, 2, 3].map((l) => (<span key={l} style={{ width: 5, height: 5, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />))}
+          </div>
+        </div>
       )}
     </div>
   );
