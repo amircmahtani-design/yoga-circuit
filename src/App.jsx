@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
-  ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check,
+  ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check, RotateCw,
   Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
@@ -130,6 +130,7 @@ export default function App() {
     const next = [...library, ...nc]; setLibrary(next); persistLibrary(next);
   }
   function deleteCard(id) { const next = library.filter((c) => c.id !== id); setLibrary(next); store.del("yoga:card:" + id); store.set("yoga:index", next.map((c) => c.id)); setCircuit((cc) => cc.filter((x) => x.cardId !== id)); }
+  function rotateCard(id) { const next = library.map((c) => (c.id === id ? { ...c, rot: ((c.rot || 0) + 90) % 360 } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
   function saveName(id) { const next = library.map((c) => (c.id === id ? { ...c, name: editName.trim() || c.name } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); setEditId(null); }
 
   const addToCircuit = (cardId) => setCircuit((c) => [...c, { iid: uid(), cardId, duration: null }]);
@@ -200,7 +201,7 @@ export default function App() {
                   <GroupHeader g={g} count={cardsIn(g.key).length} />
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                     {cardsIn(g.key).map((c, i) => (
-                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} />
+                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} />
                     ))}
                   </div>
                 </section>
@@ -272,7 +273,7 @@ export default function App() {
                       <div key={it.iid} className="rounded-2xl p-2.5 flex items-center gap-3 pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 2px 10px rgba(40,38,30,.05)" }}>
                         <span className="cz flex items-center justify-center rounded-full text-sm flex-shrink-0" style={{ width: 26, height: 26, background: "rgba(207,106,76,.13)", color: C.coralDeep }}>{i + 1}</span>
                         <div className="relative flex-shrink-0">
-                          <img src={card.src} alt={card.name} className="w-11 h-14 object-cover rounded-lg" style={{ background: "#efe9dd" }} />
+                          <img src={card.src} alt={card.name} className="w-11 h-14 object-cover rounded-lg" style={{ background: "#efe9dd", transform: card.rot ? `rotate(${card.rot}deg)` : undefined }} />
                           <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: gm.hex, borderColor: C.card }} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -305,7 +306,7 @@ export default function App() {
                         {cardsIn(g.key).map((c) => (
                           <button key={c.id} onClick={() => addToCircuit(c.id)} className="press flex-shrink-0 rounded-xl overflow-hidden relative" style={{ width: 84, background: C.card, border: `1px solid ${C.line}` }}>
                             <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative" }}>
-                              <img src={c.src} alt={c.name} className="w-full h-full object-cover" />
+                              <img src={c.src} alt={c.name} className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
                               <span className="absolute top-1.5 right-1.5 rounded-full p-1" style={{ background: C.coral }}><Plus size={11} color="#fff" /></span>
                             </div>
                             <div className="px-1.5 py-1.5"><span className="block cz text-[9.5px] text-center truncate" style={{ letterSpacing: "0.02em", color: C.ink }}>{c.name}</span></div>
@@ -372,12 +373,13 @@ function GroupHeader({ g, count, small }) {
     </div>
   );
 }
-function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard }) {
+function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard }) {
   return (
     <div className="rounded-2xl overflow-hidden relative pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)", animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-      <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative" }}>
-        <img src={c.src} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
-        <button onClick={() => deleteCard(c.id)} className="press absolute top-2 right-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><Trash2 size={13} /></button>
+      <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative", overflow: "hidden" }}>
+        <img src={c.src} alt={c.name} loading="lazy" className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
+        <button onClick={() => rotateCard(c.id)} aria-label="Rotate" className="press absolute top-2 left-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><RotateCw size={13} /></button>
+        <button onClick={() => deleteCard(c.id)} aria-label="Delete" className="press absolute top-2 right-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><Trash2 size={13} /></button>
       </div>
       {editId === c.id ? (
         <div className="p-2 flex items-center gap-1.5">
@@ -550,7 +552,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
       </div>
       <div className="relative flex-1 flex items-center justify-center px-6 py-5 min-h-0">
         <div key={pl.index} className="pop relative h-full w-full max-w-xs flex items-center justify-center">
-          <img src={cur.card.src} alt={cur.card.name} className="max-h-full max-w-full object-contain rounded-[22px]" style={{ boxShadow: "0 20px 60px rgba(0,0,0,.55)", opacity: isRest ? 0.3 : 1, transition: "opacity .35s" }} />
+          <img src={cur.card.src} alt={cur.card.name} className="max-h-full max-w-full object-contain rounded-[22px]" style={{ boxShadow: "0 20px 60px rgba(0,0,0,.55)", opacity: isRest ? 0.3 : 1, transition: "opacity .35s", transform: cur.card.rot ? `rotate(${cur.card.rot}deg)` : undefined }} />
           {isRest && (<div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
             <span className="text-xs tracking-[0.35em] uppercase mb-2" style={{ color: "#aebfac" }}>Rest · next up</span>
             <span className="cz text-2xl" style={{ letterSpacing: "0.04em" }}>{next ? next.card.name : ""}</span>
