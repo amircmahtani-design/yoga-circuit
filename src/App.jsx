@@ -69,7 +69,7 @@ function bestVoice(list) {
 /* ================================================================= */
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("cards");
+  const [tab, setTab] = useState("build");
   const [library, setLibrary] = useState([]);
   const [circuit, setCircuit] = useState([]);
   const [holdDefault, setHoldDefault] = useState(30);
@@ -333,7 +333,7 @@ export default function App() {
 
         <nav className="fixed inset-x-0 bottom-0 px-5 pb-4 pt-2" style={{ background: `linear-gradient(to top, ${C.bg2} 65%, transparent)` }}>
           <div className="max-w-2xl mx-auto rounded-full p-1.5 flex gap-1" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 6px 24px rgba(40,38,30,.13)" }}>
-            {[["cards", "Cards", <LayoutGrid size={18} key="a" />], ["build", "Circuit", <ListChecks size={18} key="b" />]].map(([k, label, icon]) => (
+            {[["build", "Circuit", <ListChecks size={18} key="b" />], ["cards", "Cards", <LayoutGrid size={18} key="a" />]].map(([k, label, icon]) => (
               <button key={k} onClick={() => setTab(k)} className="press flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-sm font-semibold transition-colors" style={tab === k ? { background: C.coral, color: "#fff" } : { color: C.sub }}>
                 {icon}{label}{k === "build" && circuit.length > 0 ? <span className="text-xs rounded-full px-1.5 py-0.5" style={{ background: tab === k ? "rgba(255,255,255,.22)" : "rgba(207,106,76,.13)", color: tab === k ? "#fff" : C.coralDeep }}>{circuit.length}</span> : null}
               </button>
@@ -473,7 +473,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
         const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000);
         const sec = Math.ceil(rem);
         if (rem > 0.06 && sec >= 1 && sec <= 3 && sec !== lastTickRef.current) { lastTickRef.current = sec; tick(); }
-        if (restRef.current === 0 && !saidNextRef.current) { const nxt = seq[p.index + 1]; if (nxt && rem <= 5 && rem > 0.3) { saidNextRef.current = true; speakRef.current("Next. " + nxt.card.name); } }
+        if (restRef.current === 0 && !saidNextRef.current) { const nxt = seq[p.index + 1]; if (nxt && rem <= 6.5 && rem > 3.4 && (p.total - rem) > 2.4) { saidNextRef.current = true; speakRef.current("Next. " + nxt.card.name); } }
       }
       setPl((prev) => { if (!prev.running || prev.done) return prev; const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000); if (rem > 0) return { ...prev, remaining: rem }; return advance(prev); });
     }, 100);
