@@ -210,6 +210,42 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Your sequence</h3>
+                {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear all</button>}
+              </div>
+
+              {circuit.length === 0 ? (
+                <div className="rounded-2xl py-10 px-6 text-center mb-6" style={{ border: `1.5px dashed ${C.line}`, background: "rgba(255,255,255,.4)" }}>
+                  <div className="rounded-2xl inline-flex p-3 mb-3" style={{ background: "rgba(207,106,76,.12)", color: C.coralDeep }}><ListChecks size={22} /></div>
+                  <p className="text-sm" style={{ color: C.sub }}>Tap cards below to build your flow.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 overflow-y-auto mb-6 pr-0.5" style={{ maxHeight: "46vh" }}>
+                  {circuit.map((it, i) => {
+                    const card = cardOf(it.cardId); if (!card) return null;
+                    const gm = groupMeta(card.group);
+                    return (
+                      <div key={it.iid} className="rounded-2xl p-2.5 flex items-center gap-3 pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 2px 10px rgba(40,38,30,.05)" }}>
+                        <span className="cz flex items-center justify-center rounded-full text-sm flex-shrink-0" style={{ width: 26, height: 26, background: "rgba(207,106,76,.13)", color: C.coralDeep }}>{i + 1}</span>
+                        <div className="relative flex-shrink-0">
+                          <img src={card.src} alt={card.name} className="w-11 h-14 object-cover rounded-lg" style={{ background: "#efe9dd" }} />
+                          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: gm.hex, borderColor: C.card }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="cz text-[13px] truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{card.name}</div>
+                          <DurationStepper value={it.duration} fallback={holdDefault} onChange={(v) => setItemDur(it.iid, v)} />
+                        </div>
+                        <div className="flex flex-col -my-1">
+                          <button onClick={() => move(it.iid, -1)} disabled={i === 0} className="press p-1 disabled:opacity-25" style={{ color: C.sub }}><ArrowUp size={16} /></button>
+                          <button onClick={() => move(it.iid, 1)} disabled={i === circuit.length - 1} className="press p-1 disabled:opacity-25" style={{ color: C.sub }}><ArrowDown size={16} /></button>
+                        </div>
+                        <button onClick={() => removeFromCircuit(it.iid)} className="press p-2" style={{ color: C.coralDeep }}><Trash2 size={16} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Add poses by colour</h3>
                 <span className="text-xs" style={{ color: C.faint }}>tap to add</span>
@@ -238,42 +274,6 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Your sequence</h3>
-                {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear all</button>}
-              </div>
-
-              {circuit.length === 0 ? (
-                <div className="rounded-2xl py-12 px-6 text-center" style={{ border: `1.5px dashed ${C.line}`, background: "rgba(255,255,255,.4)" }}>
-                  <div className="rounded-2xl inline-flex p-3 mb-3" style={{ background: "rgba(207,106,76,.12)", color: C.coralDeep }}><ListChecks size={22} /></div>
-                  <p className="text-sm" style={{ color: C.sub }}>Tap cards above to build your flow.</p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {circuit.map((it, i) => {
-                    const card = cardOf(it.cardId); if (!card) return null;
-                    const gm = groupMeta(card.group);
-                    return (
-                      <div key={it.iid} className="rounded-2xl p-2.5 flex items-center gap-3 pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 2px 10px rgba(40,38,30,.05)" }}>
-                        <span className="cz flex items-center justify-center rounded-full text-sm flex-shrink-0" style={{ width: 26, height: 26, background: "rgba(207,106,76,.13)", color: C.coralDeep }}>{i + 1}</span>
-                        <div className="relative flex-shrink-0">
-                          <img src={card.src} alt={card.name} className="w-11 h-14 object-cover rounded-lg" style={{ background: "#efe9dd" }} />
-                          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: gm.hex, borderColor: C.card }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="cz text-[13px] truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{card.name}</div>
-                          <DurationStepper value={it.duration} fallback={holdDefault} onChange={(v) => setItemDur(it.iid, v)} />
-                        </div>
-                        <div className="flex flex-col -my-1">
-                          <button onClick={() => move(it.iid, -1)} disabled={i === 0} className="press p-1 disabled:opacity-25" style={{ color: C.sub }}><ArrowUp size={16} /></button>
-                          <button onClick={() => move(it.iid, 1)} disabled={i === circuit.length - 1} className="press p-1 disabled:opacity-25" style={{ color: C.sub }}><ArrowDown size={16} /></button>
-                        </div>
-                        <button onClick={() => removeFromCircuit(it.iid)} className="press p-2" style={{ color: C.coralDeep }}><Trash2 size={16} /></button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </section>
           )}
         </div>
@@ -384,20 +384,35 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   const first = seq[0];
   const [pl, setPl] = useState({ index: 0, phase: "count", total: first ? first.duration : 0, remaining: first ? first.duration : 0, running: true, done: false });
 
-  const beep = useCallback((freq = 660, dur = 0.14, vol = 0.16) => {
-    if (!soundOn) return;
+  const lastTickRef = useRef(99);
+  const plRef = useRef(pl); plRef.current = pl;
+  const ensureCtx = () => {
+    if (!audioRef.current) { try { audioRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+    const c = audioRef.current; if (c && c.state === "suspended") { try { c.resume(); } catch {} } return c;
+  };
+  const tone = useCallback((freq, dur, vol, when = 0) => {
+    if (!soundOn) return; const ctx = ensureCtx(); if (!ctx) return;
     try {
-      if (!audioRef.current) audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = audioRef.current; const o = ctx.createOscillator(), g = ctx.createGain();
-      o.frequency.value = freq; o.type = "sine"; g.gain.value = vol; o.connect(g); g.connect(ctx.destination);
-      o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur); o.stop(ctx.currentTime + dur);
+      const t = ctx.currentTime + when; const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.03);
     } catch {}
   }, [soundOn]);
+  const chimeNext = useCallback(() => { tone(620, 0.16, 0.18, 0); tone(900, 0.22, 0.2, 0.12); }, [tone]);
+  const tick = useCallback(() => tone(1000, 0.05, 0.09, 0), [tone]);
+  const chimeDone = useCallback(() => { tone(660, 0.22, 0.18, 0); tone(880, 0.22, 0.18, 0.16); tone(1175, 0.4, 0.18, 0.32); }, [tone]);
 
-  useEffect(() => { endAtRef.current = performance.now() + (first ? first.duration : 0) * 1000; beep(740); }, []); // eslint-disable-line
+  useEffect(() => { endAtRef.current = performance.now() + (first ? first.duration : 0) * 1000; chimeNext(); }, []); // eslint-disable-line
 
   useEffect(() => {
     const id = setInterval(() => {
+      const p = plRef.current;
+      if (p.running && !p.done && p.phase === "count") {
+        const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000);
+        const sec = Math.ceil(rem);
+        if (rem > 0.06 && sec >= 1 && sec <= 3 && sec !== lastTickRef.current) { lastTickRef.current = sec; tick(); }
+      }
       setPl((prev) => { if (!prev.running || prev.done) return prev; const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000); if (rem > 0) return { ...prev, remaining: rem }; return advance(prev); });
     }, 100);
     return () => clearInterval(id);
@@ -416,11 +431,13 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   const prevKey = useRef("");
   useEffect(() => {
     const key = pl.done ? "done" : `${pl.index}-${pl.phase}`; if (key === prevKey.current) return; prevKey.current = key;
-    if (pl.done) beep(540, 0.5, 0.18); else if (pl.phase === "count") beep(740, 0.16); else beep(460, 0.12, 0.1);
-  }, [pl.index, pl.phase, pl.done, beep]);
+    lastTickRef.current = 99;
+    if (pl.done) chimeDone(); else if (pl.phase === "count") chimeNext(); else tone(520, 0.16, 0.12);
+  }, [pl.index, pl.phase, pl.done, chimeNext, chimeDone, tone]);
+  useEffect(() => { const u = () => ensureCtx(); window.addEventListener("pointerdown", u); return () => window.removeEventListener("pointerdown", u); }, []); // eslint-disable-line
 
-  const goTo = useCallback((i) => { if (i < 0 || i >= seq.length) return; const d = seq[i].duration; endAtRef.current = performance.now() + d * 1000; setPl({ index: i, phase: "count", total: d, remaining: d, running: true, done: false }); }, [seq]);
-  const togglePause = useCallback(() => { setPl((p) => { if (p.done) return p; if (p.running) return { ...p, running: false }; endAtRef.current = performance.now() + p.remaining * 1000; return { ...p, running: true }; }); }, []);
+  const goTo = useCallback((i) => { if (i < 0 || i >= seq.length) return; ensureCtx(); lastTickRef.current = 99; const d = seq[i].duration; endAtRef.current = performance.now() + d * 1000; setPl({ index: i, phase: "count", total: d, remaining: d, running: true, done: false }); }, [seq]);
+  const togglePause = useCallback(() => { ensureCtx(); setPl((p) => { if (p.done) return p; if (p.running) return { ...p, running: false }; endAtRef.current = performance.now() + p.remaining * 1000; return { ...p, running: true }; }); }, []);
   const restart = () => goTo(0);
 
   useEffect(() => {
@@ -429,13 +446,13 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   }, [pl.index, goTo, togglePause, onClose]);
 
   const bg = { background: `radial-gradient(130% 90% at 50% 0%, ${C.night1} 0%, ${C.night2} 70%)` };
-  if (!first) return (<div className="yc fixed inset-0 flex items-center justify-center" style={bg}><div className="text-center text-white"><p>Those cards were removed.</p><button onClick={onClose} className="press mt-3 h-10 px-5 rounded-full" style={{ background: "#fff", color: C.ink }}>Close</button></div></div>);
+  if (!first) return (<div className="yc fixed inset-0 flex items-center justify-center" style={{ ...bg, zIndex: 60 }}><div className="text-center text-white"><p>Those cards were removed.</p><button onClick={onClose} className="press mt-3 h-10 px-5 rounded-full" style={{ background: "#fff", color: C.ink }}>Close</button></div></div>);
 
   const cur = seq[pl.index]; const isRest = pl.phase === "rest"; const next = seq[pl.index + 1];
   const frac = pl.total > 0 ? pl.remaining / pl.total : 0;
 
   if (pl.done) {
-    return (<div className="yc fixed inset-0 flex flex-col items-center justify-center px-8 text-center text-white" style={bg}>
+    return (<div className="yc fixed inset-0 flex flex-col items-center justify-center px-8 text-center text-white" style={{ ...bg, zIndex: 60 }}>
       <div className="rounded-full p-6 mb-6 fadeUp" style={{ background: "rgba(207,106,76,.18)" }}><Flame size={42} style={{ color: C.coral }} /></div>
       <h2 className="cz text-3xl fadeUp" style={{ letterSpacing: "0.05em", animationDelay: "60ms" }}>PRACTICE COMPLETE</h2>
       <p className="mt-3 text-sm fadeUp" style={{ color: "#c9c2b4", animationDelay: "120ms" }}>{seq.length} poses · beautifully done.</p>
@@ -448,10 +465,10 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
 
   const R = 54, CIRC = 2 * Math.PI * R;
   return (
-    <div className="yc fixed inset-0 flex flex-col text-white overflow-hidden" style={bg}>
+    <div className="yc fixed inset-0 flex flex-col text-white overflow-hidden" style={{ ...bg, zIndex: 60 }}>
       <div className="aura" style={{ position: "absolute", top: "-20%", left: "-10%", width: "70%", height: "70%", borderRadius: "50%", background: `radial-gradient(circle, ${isRest ? "rgba(120,150,130,.26)" : "rgba(207,106,76,.24)"}, transparent 70%)`, filter: "blur(40px)", pointerEvents: "none", transition: "background .6s" }} />
-      <div className="relative flex items-center justify-between px-5 pt-5">
-        <button onClick={onClose} className="press p-2.5 rounded-full" style={{ background: "rgba(255,255,255,.08)" }}><X size={20} /></button>
+      <div className="relative flex items-center justify-between px-5" style={{ paddingTop: "calc(env(safe-area-inset-top) + 14px)" }}>
+        <button onClick={onClose} aria-label="Close" className="press p-3 rounded-full" style={{ background: "rgba(255,255,255,.12)", touchAction: "manipulation" }}><X size={22} /></button>
         <div className="text-sm font-medium tracking-wide" style={{ color: "#c9c2b4" }}>Pose {pl.index + 1} of {seq.length}</div>
         <div className="w-10" />
       </div>
@@ -487,7 +504,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
           </div>
         </div>
       </div>
-      <div className="relative flex items-center justify-center gap-6 px-6 pt-6 pb-9">
+      <div className="relative flex items-center justify-center gap-6 px-6 pt-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 30px)" }}>
         <button onClick={() => goTo(pl.index - 1)} disabled={pl.index === 0} className="press p-4 rounded-full disabled:opacity-25" style={{ background: "rgba(255,255,255,.08)" }}><ChevronLeft size={26} /></button>
         <button onClick={togglePause} className="press rounded-full flex items-center justify-center" style={{ width: 78, height: 78, background: C.coral, color: "#fff", boxShadow: "0 10px 30px rgba(207,106,76,.42)" }}>{pl.running ? <Pause size={32} fill="#fff" /> : <Play size={32} fill="#fff" style={{ marginLeft: 3 }} />}</button>
         <button onClick={() => goTo(pl.index + 1)} className="press p-4 rounded-full" style={{ background: "rgba(255,255,255,.08)" }}><ChevronRight size={26} /></button>
@@ -578,7 +595,7 @@ function CropEditor({ files, onComplete, onCancel }) {
 
   return (
     <div className="yc fixed inset-0 z-50 flex flex-col" style={{ background: "#14140f", color: "#fff" }}>
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+      <div className="flex items-center justify-between px-5 pb-3" style={{ paddingTop: "calc(env(safe-area-inset-top) + 14px)" }}>
         <button onClick={onCancel} className="press p-2.5 rounded-full" style={{ background: "rgba(255,255,255,.08)" }}><X size={20} /></button>
         <div className="text-center">
           <div className="cz text-base leading-none" style={{ letterSpacing: "0.05em" }}>CROP &amp; STRAIGHTEN</div>
