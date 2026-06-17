@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
   ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check, RotateCw,
-  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone
+  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
 
@@ -83,6 +83,10 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
   const [filter, setFilter] = useState(null);
+  const [addFor, setAddFor] = useState(null);
+  const [addDur, setAddDur] = useState(30);
+  const [toast, setToast] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -122,6 +126,7 @@ export default function App() {
     } catch {}
   }
   useEffect(() => { if (!loading) store.set("yoga:circuit", circuit); }, [circuit, loading]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1600); return () => clearTimeout(t); }, [toast]);
 
   function addFiles(files) { const arr = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, 90); if (arr.length) setQueue(arr); }
   function commitCards(cards) {
@@ -133,7 +138,8 @@ export default function App() {
   function rotateCard(id) { const next = library.map((c) => (c.id === id ? { ...c, rot: ((c.rot || 0) + 90) % 360 } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
   function saveName(id) { const next = library.map((c) => (c.id === id ? { ...c, name: editName.trim() || c.name } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); setEditId(null); }
 
-  const addToCircuit = (cardId) => setCircuit((c) => [...c, { iid: uid(), cardId, duration: null }]);
+  const addToCircuit = (cardId, duration = null) => setCircuit((c) => [...c, { iid: uid(), cardId, duration }]);
+  function openAdd(id) { setAddDur(holdDefault || 30); setAddFor(id); }
   const removeFromCircuit = (iid) => setCircuit((c) => c.filter((x) => x.iid !== iid));
   const move = (iid, dir) => setCircuit((c) => { const i = c.findIndex((x) => x.iid === iid); const j = i + dir; if (i < 0 || j < 0 || j >= c.length) return c; const n = [...c]; [n[i], n[j]] = [n[j], n[i]]; return n; });
   const setItemDur = (iid, val) => setCircuit((c) => c.map((x) => (x.iid === iid ? { ...x, duration: val } : x)));
@@ -189,10 +195,51 @@ export default function App() {
             <section className="fadeUp">
               <div className="flex items-end justify-between mb-3">
                 <h2 className="cz text-2xl" style={titleStyle}>Your deck</h2>
-                <button onClick={() => fileRef.current?.click()} className="press h-10 px-4 rounded-full flex items-center gap-1.5 text-sm font-semibold" style={{ background: C.coral, color: "#fff", boxShadow: "0 6px 16px rgba(207,106,76,.3)" }}>
-                  <Plus size={17} /> Add
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowSettings((v) => !v)} aria-label="Practice settings" className="press h-10 w-10 rounded-full flex items-center justify-center" style={{ background: showSettings ? C.coral : "#f1ebdd", color: showSettings ? "#fff" : C.sub, border: `1px solid ${C.line}` }}><Settings2 size={17} /></button>
+                  <button onClick={() => fileRef.current?.click()} className="press h-10 px-4 rounded-full flex items-center gap-1.5 text-sm font-semibold" style={{ background: C.coral, color: "#fff", boxShadow: "0 6px 16px rgba(207,106,76,.3)" }}>
+                    <Plus size={17} /> Add
+                  </button>
+                </div>
               </div>
+
+              {showSettings && (
+                <div className="rounded-2xl p-5 mb-5 fadeUp" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)" }}>
+                  <Row icon={<Wind size={16} />} label="Rest between poses">
+                    <Chips value={restDur} onChange={setRestDur} options={[[0, "Off"], [5, "5s"], [10, "10s"], [15, "15s"], [30, "30s"]]} />
+                  </Row>
+                  <div className="h-px my-4" style={{ background: C.line }} />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span style={{ color: C.coralDeep }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</span>
+                      <span className="text-sm font-medium" style={{ color: C.ink }}>Sound cue on change</span>
+                    </div>
+                    <button onClick={() => setSoundOn((s) => !s)} className="press rounded-full transition-colors" style={{ width: 50, height: 28, background: soundOn ? C.coral : "#d6cbb8", position: "relative" }}>
+                      <span style={{ position: "absolute", top: 3, left: soundOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                    </button>
+                  </div>
+                  <div className="h-px my-4" style={{ background: C.line }} />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span style={{ color: C.coralDeep }}><Megaphone size={16} /></span>
+                      <span className="text-sm font-medium" style={{ color: C.ink }}>Speak pose names</span>
+                    </div>
+                    <button onClick={() => { const nv = !voiceOn; if (nv && !voiceName) { const b = bestVoice(voices); if (b) setVoiceName(b.voiceURI || b.name); } setVoiceOn(nv); }} className="press rounded-full transition-colors" style={{ width: 50, height: 28, background: voiceOn ? C.coral : "#d6cbb8", position: "relative" }}>
+                      <span style={{ position: "absolute", top: 3, left: voiceOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                    </button>
+                  </div>
+                  {voiceOn && (
+                    <div className="flex items-center gap-2 mt-3">
+                      {voices.length > 0 ? (
+                        <select value={voiceName || ""} onChange={(e) => setVoiceName(e.target.value)} className="flex-1 h-9 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }}>
+                          {voices.map((v) => (<option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>{v.name}</option>))}
+                        </select>
+                      ) : (<span className="flex-1 text-xs" style={{ color: C.faint }}>Using your device's default voice.</span>)}
+                      <button onClick={speakSample} className="press h-9 px-4 rounded-xl text-sm font-semibold" style={{ background: C.coral, color: "#fff" }}>Test</button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <FilterChips groups={presentGroups} value={filter} onChange={setFilter} cardsIn={cardsIn} />
 
@@ -201,7 +248,7 @@ export default function App() {
                   <GroupHeader g={g} count={cardsIn(g.key).length} />
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                     {cardsIn(g.key).map((c, i) => (
-                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} />
+                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} openAdd={openAdd} />
                     ))}
                   </div>
                 </section>
@@ -212,60 +259,19 @@ export default function App() {
           {/* ---------------- BUILD ---------------- */}
           {tab === "build" && (
             <section className="fadeUp">
-              <h2 className="cz text-2xl mb-4" style={titleStyle}>Build a circuit</h2>
-
-              <div className="rounded-2xl p-5 mb-6" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)" }}>
-                <Row icon={<Clock size={16} />} label="Hold each pose">
-                  <Chips value={holdDefault} onChange={setHoldDefault} options={[[15, "15s"], [30, "30s"], [45, "45s"], [60, "1m"], [90, "1m30"]]} />
-                </Row>
-                <div className="h-px my-4" style={{ background: C.line }} />
-                <Row icon={<Wind size={16} />} label="Rest between poses">
-                  <Chips value={restDur} onChange={setRestDur} options={[[0, "Off"], [5, "5s"], [10, "10s"], [15, "15s"], [30, "30s"]]} />
-                </Row>
-                <div className="h-px my-4" style={{ background: C.line }} />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span style={{ color: C.coralDeep }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</span>
-                    <span className="text-sm font-medium" style={{ color: C.ink }}>Sound cue on change</span>
-                  </div>
-                  <button onClick={() => setSoundOn((s) => !s)} className="press rounded-full transition-colors" style={{ width: 50, height: 28, background: soundOn ? C.coral : "#d6cbb8", position: "relative" }}>
-                    <span style={{ position: "absolute", top: 3, left: soundOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
-                  </button>
-                </div>
-                <div className="h-px my-4" style={{ background: C.line }} />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span style={{ color: C.coralDeep }}><Megaphone size={16} /></span>
-                    <span className="text-sm font-medium" style={{ color: C.ink }}>Speak pose names</span>
-                  </div>
-                  <button onClick={() => { const nv = !voiceOn; if (nv && !voiceName) { const b = bestVoice(voices); if (b) setVoiceName(b.voiceURI || b.name); } setVoiceOn(nv); }} className="press rounded-full transition-colors" style={{ width: 50, height: 28, background: voiceOn ? C.coral : "#d6cbb8", position: "relative" }}>
-                    <span style={{ position: "absolute", top: 3, left: voiceOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
-                  </button>
-                </div>
-                {voiceOn && (
-                  <div className="flex items-center gap-2 mt-3">
-                    {voices.length > 0 ? (
-                      <select value={voiceName || ""} onChange={(e) => setVoiceName(e.target.value)} className="flex-1 h-9 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }}>
-                        {voices.map((v) => (<option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>{v.name}</option>))}
-                      </select>
-                    ) : (<span className="flex-1 text-xs" style={{ color: C.faint }}>Using your device's default voice.</span>)}
-                    <button onClick={speakSample} className="press h-9 px-4 rounded-xl text-sm font-semibold" style={{ background: C.coral, color: "#fff" }}>Test</button>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Your sequence</h3>
+              <div className="flex items-end justify-between mb-4">
+                <h2 className="cz text-2xl" style={titleStyle}>Your circuit</h2>
                 {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear all</button>}
               </div>
 
               {circuit.length === 0 ? (
-                <div className="rounded-2xl py-10 px-6 text-center mb-6" style={{ border: `1.5px dashed ${C.line}`, background: "rgba(255,255,255,.4)" }}>
+                <div className="rounded-2xl py-14 px-6 text-center" style={{ border: `1.5px dashed ${C.line}`, background: "rgba(255,255,255,.4)" }}>
                   <div className="rounded-2xl inline-flex p-3 mb-3" style={{ background: "rgba(207,106,76,.12)", color: C.coralDeep }}><ListChecks size={22} /></div>
-                  <p className="text-sm" style={{ color: C.sub }}>Tap cards below to build your flow.</p>
+                  <p className="text-sm mb-4" style={{ color: C.sub }}>Your circuit is empty.</p>
+                  <button onClick={() => setTab("cards")} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-semibold" style={{ background: C.coral, color: "#fff" }}><LayoutGrid size={16} /> Add poses from Cards</button>
                 </div>
               ) : (
-                <div className="space-y-2.5 overflow-y-auto mb-6 pr-0.5" style={{ maxHeight: "46vh" }}>
+                <div className="space-y-2.5">
                   {circuit.map((it, i) => {
                     const card = cardOf(it.cardId); if (!card) return null;
                     const gm = groupMeta(card.group);
@@ -288,33 +294,6 @@ export default function App() {
                       </div>
                     );
                   })}
-                </div>
-              )}
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Add poses by colour</h3>
-                <span className="text-xs" style={{ color: C.faint }}>tap to add</span>
-              </div>
-              {library.length === 0 ? (
-                <Empty onAdd={() => setTab("cards")} />
-              ) : (
-                <div className="mb-6">
-                  <FilterChips groups={presentGroups} value={filter} onChange={setFilter} cardsIn={cardsIn} />
-                  {groupsToShow.map((g) => (
-                    <div key={g.key} className="mb-4">
-                      <GroupHeader g={g} count={cardsIn(g.key).length} small />
-                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 no-sb">
-                        {cardsIn(g.key).map((c) => (
-                          <button key={c.id} onClick={() => addToCircuit(c.id)} className="press flex-shrink-0 rounded-xl overflow-hidden relative" style={{ width: 84, background: C.card, border: `1px solid ${C.line}` }}>
-                            <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative" }}>
-                              <img src={c.src} alt={c.name} className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
-                              <span className="absolute top-1.5 right-1.5 rounded-full p-1" style={{ background: C.coral }}><Plus size={11} color="#fff" /></span>
-                            </div>
-                            <div className="px-1.5 py-1.5"><span className="block cz text-[9.5px] text-center truncate" style={{ letterSpacing: "0.02em", color: C.ink }}>{c.name}</span></div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
 
@@ -343,6 +322,38 @@ export default function App() {
         </nav>
 
         {playing && <Player circuit={circuit} library={library} holdDefault={holdDefault} restDur={restDur} soundOn={soundOn} voiceOn={voiceOn} voiceName={voiceName} onClose={() => setPlaying(false)} />}
+        {addFor && (() => {
+          const card = cardOf(addFor); if (!card) return null;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: "rgba(20,22,15,.55)" }} onClick={() => setAddFor(null)}>
+              <div className="w-full max-w-sm m-3 rounded-3xl p-5 fadeUp" style={{ background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,.4)" }} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-3 mb-4">
+                  <img src={card.src} alt="" className="w-12 h-16 object-cover rounded-lg flex-shrink-0" style={{ background: "#efe9dd", transform: card.rot ? `rotate(${card.rot}deg)` : undefined }} />
+                  <div className="min-w-0">
+                    <div className="text-xs" style={{ color: C.faint }}>Hold this pose for</div>
+                    <div className="cz text-lg truncate" style={{ color: C.ink }}>{card.name}</div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {[15, 20, 30, 45, 60, 90].map((v) => (
+                    <button key={v} onClick={() => setAddDur(v)} className="press h-10 px-3.5 rounded-full text-sm font-semibold" style={addDur === v ? { background: C.coral, color: "#fff" } : { background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}>{v}s</button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-center gap-5 mb-5">
+                  <button onClick={() => setAddDur((d) => Math.max(5, d - 5))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Minus size={18} /></button>
+                  <div className="cz text-3xl" style={{ color: C.ink, minWidth: 90, textAlign: "center" }}>{addDur}s</div>
+                  <button onClick={() => setAddDur((d) => Math.min(600, d + 5))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Plus size={18} /></button>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setAddFor(null)} className="press flex-1 h-12 rounded-full font-semibold" style={{ background: "#eadfce", color: C.ink }}>Cancel</button>
+                  <button onClick={() => { addToCircuit(addFor, addDur); setHoldDefault(addDur); setToast(card.name + " added"); setAddFor(null); }} className="press flex-1 h-12 rounded-full font-bold" style={{ background: C.coral, color: "#fff" }}>Add to circuit</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {toast && (<div className="fixed left-1/2 z-[80] px-4 py-2.5 rounded-full text-sm font-semibold fadeUp" style={{ bottom: 96, transform: "translateX(-50%)", background: C.ink, color: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,.3)" }}>{toast} ✓</div>)}
         {queue.length > 0 && <CropEditor files={queue} onComplete={(cards) => { commitCards(cards); setQueue([]); }} onCancel={() => setQueue([])} />}
       </div>
     </>
@@ -373,18 +384,19 @@ function GroupHeader({ g, count, small }) {
     </div>
   );
 }
-function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard }) {
+function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard, openAdd }) {
   return (
     <div className="rounded-2xl overflow-hidden relative pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)", animationDelay: `${Math.min(i, 12) * 30}ms` }}>
       <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative", overflow: "hidden" }}>
         <img src={c.src} alt={c.name} loading="lazy" className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
         <button onClick={() => rotateCard(c.id)} aria-label="Rotate" className="press absolute top-2 left-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><RotateCw size={13} /></button>
-        <button onClick={() => deleteCard(c.id)} aria-label="Delete" className="press absolute top-2 right-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><Trash2 size={13} /></button>
+        <button onClick={() => openAdd(c.id)} aria-label="Add to circuit" className="press absolute top-2 right-2 p-2.5 rounded-full" style={{ background: C.coral, color: "#fff", boxShadow: "0 2px 10px rgba(207,106,76,.55)" }}><Plus size={16} /></button>
       </div>
       {editId === c.id ? (
         <div className="p-2 flex items-center gap-1.5">
           <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveName(c.id)} className="w-full text-sm px-2 py-1 rounded-lg outline-none" style={{ border: `1px solid ${C.coral}`, background: "#fff", color: C.ink }} />
-          <button onClick={() => saveName(c.id)} className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
+          <button onClick={() => saveName(c.id)} aria-label="Save name" className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
+          <button onClick={() => deleteCard(c.id)} aria-label="Delete card" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.coralDeep }}><Trash2 size={14} /></button>
         </div>
       ) : (
         <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="w-full px-2.5 py-2.5 flex items-center justify-center gap-1.5">
