@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
   ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check,
-  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus
+  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
 
@@ -59,6 +59,13 @@ const STYLE = `
 `;
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
+function bestVoice(list) {
+  if (!list || !list.length) return null;
+  const pref = ["Siri", "Samantha", "Natural", "Enhanced", "Google", "Aaron", "Allison", "Karen", "Serena", "Daniel"];
+  for (const pf of pref) { const v = list.find((x) => x.name && x.name.includes(pf)); if (v) return v; }
+  return list.find((x) => x.localService) || list[0];
+}
+
 /* ================================================================= */
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -68,6 +75,9 @@ export default function App() {
   const [holdDefault, setHoldDefault] = useState(30);
   const [restDur, setRestDur] = useState(0);
   const [soundOn, setSoundOn] = useState(true);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voiceName, setVoiceName] = useState(null);
+  const [voices, setVoices] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState("");
   const [playing, setPlaying] = useState(false);
@@ -78,7 +88,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       const s = await store.get("yoga:settings");
-      if (s) { setHoldDefault(s.holdDefault ?? 30); setRestDur(s.restDur ?? 0); setSoundOn(s.soundOn ?? true); }
+      if (s) { setHoldDefault(s.holdDefault ?? 30); setRestDur(s.restDur ?? 0); setSoundOn(s.soundOn ?? true); setVoiceOn(s.voiceOn ?? false); setVoiceName(s.voiceName ?? null); }
       const idx = (await store.get("yoga:index")) || [];
       let cards = [];
       for (const id of idx) { const c = await store.get("yoga:card:" + id); if (c) cards.push(c); }
@@ -97,7 +107,20 @@ export default function App() {
   }, []);
 
   async function persistLibrary(cards) { await store.set("yoga:index", cards.map((c) => c.id)); for (const c of cards) await store.set("yoga:card:" + c.id, c); }
-  useEffect(() => { if (!loading) store.set("yoga:settings", { holdDefault, restDur, soundOn }); }, [holdDefault, restDur, soundOn, loading]);
+  useEffect(() => { if (!loading) store.set("yoga:settings", { holdDefault, restDur, soundOn, voiceOn, voiceName }); }, [holdDefault, restDur, soundOn, voiceOn, voiceName, loading]);
+  useEffect(() => {
+    const synth = window.speechSynthesis; if (!synth) return;
+    const load = () => setVoices(synth.getVoices().filter((x) => /^en(-|_|$)/i.test(x.lang)));
+    load(); try { synth.addEventListener("voiceschanged", load); } catch {}
+    return () => { try { synth.removeEventListener("voiceschanged", load); } catch {} };
+  }, []);
+  function speakSample() {
+    try { const synth = window.speechSynthesis; if (!synth) return; synth.cancel();
+      const u = new SpeechSynthesisUtterance("Triangle Pose. Next, Eagle Pose.");
+      const v = voices.find((x) => (x.voiceURI || x.name) === voiceName) || voices[0]; if (v) u.voice = v; u.rate = 0.97;
+      synth.speak(u);
+    } catch {}
+  }
   useEffect(() => { if (!loading) store.set("yoga:circuit", circuit); }, [circuit, loading]);
 
   function addFiles(files) { const arr = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, 90); if (arr.length) setQueue(arr); }
@@ -208,6 +231,26 @@ export default function App() {
                     <span style={{ position: "absolute", top: 3, left: soundOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
                   </button>
                 </div>
+                <div className="h-px my-4" style={{ background: C.line }} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span style={{ color: C.coralDeep }}><Megaphone size={16} /></span>
+                    <span className="text-sm font-medium" style={{ color: C.ink }}>Speak pose names</span>
+                  </div>
+                  <button onClick={() => { const nv = !voiceOn; if (nv && !voiceName) { const b = bestVoice(voices); if (b) setVoiceName(b.voiceURI || b.name); } setVoiceOn(nv); }} className="press rounded-full transition-colors" style={{ width: 50, height: 28, background: voiceOn ? C.coral : "#d6cbb8", position: "relative" }}>
+                    <span style={{ position: "absolute", top: 3, left: voiceOn ? 25 : 3, width: 22, height: 22, borderRadius: 99, background: "#fff", transition: "left .18s ease", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                  </button>
+                </div>
+                {voiceOn && (
+                  <div className="flex items-center gap-2 mt-3">
+                    {voices.length > 0 ? (
+                      <select value={voiceName || ""} onChange={(e) => setVoiceName(e.target.value)} className="flex-1 h-9 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }}>
+                        {voices.map((v) => (<option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>{v.name}</option>))}
+                      </select>
+                    ) : (<span className="flex-1 text-xs" style={{ color: C.faint }}>Using your device's default voice.</span>)}
+                    <button onClick={speakSample} className="press h-9 px-4 rounded-xl text-sm font-semibold" style={{ background: C.coral, color: "#fff" }}>Test</button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between mb-3">
@@ -298,7 +341,7 @@ export default function App() {
           </div>
         </nav>
 
-        {playing && <Player circuit={circuit} library={library} holdDefault={holdDefault} restDur={restDur} soundOn={soundOn} onClose={() => setPlaying(false)} />}
+        {playing && <Player circuit={circuit} library={library} holdDefault={holdDefault} restDur={restDur} soundOn={soundOn} voiceOn={voiceOn} voiceName={voiceName} onClose={() => setPlaying(false)} />}
         {queue.length > 0 && <CropEditor files={queue} onComplete={(cards) => { commitCards(cards); setQueue([]); }} onCancel={() => setQueue([])} />}
       </div>
     </>
@@ -375,7 +418,7 @@ function Empty({ onAdd }) {
 }
 
 /* ================= PLAYER ================= */
-function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
+function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voiceName, onClose }) {
   const seqRef = useRef(circuit.map((it) => ({ card: library.find((c) => c.id === it.cardId), duration: it.duration ?? holdDefault })).filter((x) => x.card));
   const seq = seqRef.current;
   const restRef = useRef(restDur);
@@ -385,6 +428,8 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   const [pl, setPl] = useState({ index: 0, phase: "count", total: first ? first.duration : 0, remaining: first ? first.duration : 0, running: true, done: false });
 
   const lastTickRef = useRef(99);
+  const saidNextRef = useRef(false);
+  const primedRef = useRef(false);
   const plRef = useRef(pl); plRef.current = pl;
   const ensureCtx = () => {
     if (!audioRef.current) { try { audioRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
@@ -402,6 +447,17 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   const chimeNext = useCallback(() => { tone(620, 0.16, 0.18, 0); tone(900, 0.22, 0.2, 0.12); }, [tone]);
   const tick = useCallback(() => tone(1000, 0.05, 0.09, 0), [tone]);
   const chimeDone = useCallback(() => { tone(660, 0.22, 0.18, 0); tone(880, 0.22, 0.18, 0.16); tone(1175, 0.4, 0.18, 0.32); }, [tone]);
+  const speak = useCallback((text) => {
+    if (!voiceOn || !text) return;
+    try {
+      const synth = window.speechSynthesis; if (!synth) return; synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const vs = synth.getVoices();
+      const v = vs.find((x) => (x.voiceURI || x.name) === voiceName) || vs.find((x) => /^en/i.test(x.lang));
+      if (v) u.voice = v; u.rate = 0.97; u.pitch = 1; u.volume = 1; synth.speak(u);
+    } catch {}
+  }, [voiceOn, voiceName]);
+  const speakRef = useRef(speak); speakRef.current = speak;
 
   useEffect(() => { endAtRef.current = performance.now() + (first ? first.duration : 0) * 1000; chimeNext(); }, []); // eslint-disable-line
 
@@ -412,6 +468,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
         const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000);
         const sec = Math.ceil(rem);
         if (rem > 0.06 && sec >= 1 && sec <= 3 && sec !== lastTickRef.current) { lastTickRef.current = sec; tick(); }
+        if (restRef.current === 0 && !saidNextRef.current) { const nxt = seq[p.index + 1]; if (nxt && rem <= 5 && rem > 0.3) { saidNextRef.current = true; speakRef.current("Next. " + nxt.card.name); } }
       }
       setPl((prev) => { if (!prev.running || prev.done) return prev; const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000); if (rem > 0) return { ...prev, remaining: rem }; return advance(prev); });
     }, 100);
@@ -431,10 +488,19 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, onClose }) {
   const prevKey = useRef("");
   useEffect(() => {
     const key = pl.done ? "done" : `${pl.index}-${pl.phase}`; if (key === prevKey.current) return; prevKey.current = key;
-    lastTickRef.current = 99;
-    if (pl.done) chimeDone(); else if (pl.phase === "count") chimeNext(); else tone(520, 0.16, 0.12);
-  }, [pl.index, pl.phase, pl.done, chimeNext, chimeDone, tone]);
-  useEffect(() => { const u = () => ensureCtx(); window.addEventListener("pointerdown", u); return () => window.removeEventListener("pointerdown", u); }, []); // eslint-disable-line
+    lastTickRef.current = 99; saidNextRef.current = false;
+    if (pl.done) { chimeDone(); }
+    else if (pl.phase === "count") { chimeNext(); speak(seq[pl.index].card.name); }
+    else { tone(520, 0.16, 0.12); const n = seq[pl.index + 1]; if (n) { speak("Next. " + n.card.name); saidNextRef.current = true; } }
+  }, [pl.index, pl.phase, pl.done, chimeNext, chimeDone, tone, speak]);
+  useEffect(() => {
+    const unlock = () => {
+      ensureCtx();
+      try { const sy = window.speechSynthesis; if (sy && !primedRef.current) { primedRef.current = true; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; sy.speak(u); } } catch {}
+    };
+    window.addEventListener("pointerdown", unlock);
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []); // eslint-disable-line
 
   const goTo = useCallback((i) => { if (i < 0 || i >= seq.length) return; ensureCtx(); lastTickRef.current = 99; const d = seq[i].duration; endAtRef.current = performance.now() + d * 1000; setPl({ index: i, phase: "count", total: d, remaining: d, running: true, done: false }); }, [seq]);
   const togglePause = useCallback(() => { ensureCtx(); setPl((p) => { if (p.done) return p; if (p.running) return { ...p, running: false }; endAtRef.current = performance.now() + p.remaining * 1000; return { ...p, running: true }; }); }, []);
