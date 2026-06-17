@@ -324,7 +324,7 @@ export default function App() {
         {showStart && (
           <div className="fixed inset-x-0 px-5" style={{ bottom: 88 }}>
             <div className="max-w-2xl mx-auto">
-              <button onClick={() => setPlaying(true)} className="press w-full h-14 rounded-full flex items-center justify-center gap-2.5 text-base font-bold fadeUp" style={{ background: C.ink, color: "#fff", boxShadow: "0 10px 30px rgba(32,37,29,.4)" }}>
+              <button onClick={() => { try { const sy = window.speechSynthesis; if (voiceOn && sy) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; const v = voices.find((x) => (x.voiceURI || x.name) === voiceName); if (v) u.voice = v; sy.speak(u); } } catch {} setPlaying(true); }} className="press w-full h-14 rounded-full flex items-center justify-center gap-2.5 text-base font-bold fadeUp" style={{ background: C.ink, color: "#fff", boxShadow: "0 10px 30px rgba(32,37,29,.4)" }}>
                 <Play size={20} fill="#fff" /> Begin practice <span className="font-medium opacity-70">· {fmt(totalTime)}</span>
               </button>
             </div>
@@ -450,11 +450,15 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
   const speak = useCallback((text) => {
     if (!voiceOn || !text) return;
     try {
-      const synth = window.speechSynthesis; if (!synth) return; synth.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      const vs = synth.getVoices();
-      const v = vs.find((x) => (x.voiceURI || x.name) === voiceName) || vs.find((x) => /^en/i.test(x.lang));
-      if (v) u.voice = v; u.rate = 0.97; u.pitch = 1; u.volume = 1; synth.speak(u);
+      const synth = window.speechSynthesis; if (!synth) return;
+      const go = () => {
+        try { if (synth.paused) synth.resume(); } catch {}
+        const u = new SpeechSynthesisUtterance(text);
+        const vs = synth.getVoices();
+        const v = vs.find((x) => (x.voiceURI || x.name) === voiceName) || vs.find((x) => /^en/i.test(x.lang));
+        if (v) u.voice = v; u.rate = 0.97; u.pitch = 1; u.volume = 1; synth.speak(u);
+      };
+      if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 130); } else { go(); }
     } catch {}
   }, [voiceOn, voiceName]);
   const speakRef = useRef(speak); speakRef.current = speak;
@@ -463,6 +467,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
 
   useEffect(() => {
     const id = setInterval(() => {
+      try { const sy = window.speechSynthesis; if (sy && sy.paused) sy.resume(); } catch {}
       const p = plRef.current;
       if (p.running && !p.done && p.phase === "count") {
         const rem = Math.max(0, (endAtRef.current - performance.now()) / 1000);
