@@ -17,7 +17,7 @@ const C = {
   coral: "#cf6a4c", coralDeep: "#b1543a", copper: "#bd8a5e",
   night1: "#1e272b", night2: "#0f1417",
 };
-const SEED_VERSION = "deck-files-v1";
+const SEED_VERSION = "deck-numbered-v2";
 const MINE = { key: "mine", name: "Your additions", hex: "#b9ad99" };
 const groupMeta = (key) => GROUPS.find((g) => g.key === key) || MINE;
 
@@ -83,8 +83,6 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
   const [filter, setFilter] = useState(null);
-  const [addFor, setAddFor] = useState(null);
-  const [addDur, setAddDur] = useState(30);
   const [toast, setToast] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
@@ -103,7 +101,7 @@ export default function App() {
       const seedV = await store.get("yoga:seed");
       if (seedV !== SEED_VERSION) {
         cards = cards.filter((c) => !c.demo && !c.sample);
-        const demo = DECK.map((d) => ({ id: uid(), name: d.name, src: imgUrl(d.img), group: d.group, intensity: d.lvl, demo: true }));
+        const demo = DECK.map((d) => ({ id: uid(), name: d.name, src: imgUrl(d.img), group: d.group, intensity: d.lvl, num: d.num, demo: true }));
         cards = [...demo, ...cards];
         await store.set("yoga:seed", SEED_VERSION);
         await persistLibrary(cards);
@@ -150,7 +148,9 @@ export default function App() {
   function saveName(id) { const next = library.map((c) => (c.id === id ? { ...c, name: editName.trim() || c.name } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); setEditId(null); }
 
   const addToCircuit = (cardId, duration = null) => setCircuit((c) => [...c, { iid: uid(), cardId, duration }]);
-  function openAdd(id) { setAddDur(holdDefault || 30); setAddFor(id); }
+  const countOf = (id) => circuit.reduce((n, x) => n + (x.cardId === id ? 1 : 0), 0);
+  function addOne(id) { const card = cardOf(id); setCircuit((c) => [...c, { iid: uid(), cardId: id, duration: holdDefault }]); if (card) setToast(card.name + " added"); }
+  function removeOne(id) { setCircuit((c) => { for (let k = c.length - 1; k >= 0; k--) { if (c[k].cardId === id) { const n = [...c]; n.splice(k, 1); return n; } } return c; }); }
   function setIntensity(id, lvl) { const next = library.map((c) => (c.id === id ? { ...c, intensity: lvl } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
   function openGen() { setGenRest(restDur); setGenOpen(true); }
   function doGenerate(mode) {
@@ -242,6 +242,10 @@ export default function App() {
 
               {showSettings && (
                 <div className="rounded-2xl p-5 mb-5 fadeUp" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)" }}>
+                  <Row icon={<Clock size={16} />} label="Hold each pose">
+                    <Chips value={holdDefault} onChange={setHoldDefault} options={[[15, "15s"], [30, "30s"], [45, "45s"], [60, "1m"], [90, "1m30"]]} />
+                  </Row>
+                  <div className="h-px my-4" style={{ background: C.line }} />
                   <Row icon={<Wind size={16} />} label="Rest between poses">
                     <Chips value={restDur} onChange={setRestDur} options={[[0, "Off"], [5, "5s"], [10, "10s"], [15, "15s"], [30, "30s"]]} />
                   </Row>
@@ -280,16 +284,11 @@ export default function App() {
 
               <FilterChips groups={presentGroups} value={filter} onChange={setFilter} cardsIn={cardsIn} />
 
-              {groupsToShow.map((g) => (
-                <section key={g.key} className="mb-6">
-                  <GroupHeader g={g} count={cardsIn(g.key).length} />
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                    {cardsIn(g.key).map((c, i) => (
-                      <CardTile key={c.id} c={c} i={i} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} openAdd={openAdd} setIntensity={setIntensity} />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-1">
+                {(filter ? library.filter((c) => c.group === filter) : library.slice()).sort((a, b) => (a.num || 999) - (b.num || 999)).map((c, i) => (
+                  <CardTile key={c.id} c={c} i={i} count={countOf(c.id)} addOne={addOne} removeOne={removeOne} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} setIntensity={setIntensity} />
+                ))}
+              </div>
             </section>
           )}
 
@@ -326,7 +325,7 @@ export default function App() {
                           <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: gm.hex, borderColor: C.card }} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="cz text-[13px] truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{card.name}</div>
+                          <div className="cz text-[13px] truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{card.num != null ? card.num + ". " : ""}{card.name}</div>
                           <DurationStepper value={it.duration} fallback={holdDefault} onChange={(v) => setItemDur(it.iid, v)} />
                         </div>
                         <div className="flex flex-col -my-1">
@@ -365,36 +364,7 @@ export default function App() {
         </nav>
 
         {playing && <Player circuit={circuit} library={library} holdDefault={holdDefault} restDur={restDur} soundOn={soundOn} voiceOn={voiceOn} voiceName={voiceName} onClose={() => setPlaying(false)} />}
-        {addFor && (() => {
-          const card = cardOf(addFor); if (!card) return null;
-          return (
-            <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: "rgba(20,22,15,.55)" }} onClick={() => setAddFor(null)}>
-              <div className="w-full max-w-sm m-3 rounded-3xl p-5 fadeUp" style={{ background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,.4)" }} onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center gap-3 mb-4">
-                  <img src={card.src} alt="" className="w-12 h-16 object-cover rounded-lg flex-shrink-0" style={{ background: "#efe9dd", transform: card.rot ? `rotate(${card.rot}deg)` : undefined }} />
-                  <div className="min-w-0">
-                    <div className="text-xs" style={{ color: C.faint }}>Hold this pose for</div>
-                    <div className="cz text-lg truncate" style={{ color: C.ink }}>{card.name}</div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {[15, 20, 30, 45, 60, 90].map((v) => (
-                    <button key={v} onClick={() => setAddDur(v)} className="press h-10 px-3.5 rounded-full text-sm font-semibold" style={addDur === v ? { background: C.coral, color: "#fff" } : { background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}>{v}s</button>
-                  ))}
-                </div>
-                <div className="flex items-center justify-center gap-5 mb-5">
-                  <button onClick={() => setAddDur((d) => Math.max(5, d - 5))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Minus size={18} /></button>
-                  <div className="cz text-3xl" style={{ color: C.ink, minWidth: 90, textAlign: "center" }}>{addDur}s</div>
-                  <button onClick={() => setAddDur((d) => Math.min(600, d + 5))} className="press w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.ink }}><Plus size={18} /></button>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setAddFor(null)} className="press flex-1 h-12 rounded-full font-semibold" style={{ background: "#eadfce", color: C.ink }}>Cancel</button>
-                  <button onClick={() => { addToCircuit(addFor, addDur); setHoldDefault(addDur); setToast(card.name + " added"); setAddFor(null); }} className="press flex-1 h-12 rounded-full font-bold" style={{ background: C.coral, color: "#fff" }}>Add to circuit</button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* one-tap add — no modal */}
 
         {toast && (<div className="fixed left-1/2 z-[80] px-4 py-2.5 rounded-full text-sm font-semibold fadeUp" style={{ bottom: 96, transform: "translateX(-50%)", background: C.ink, color: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,.3)" }}>{toast} ✓</div>)}
 
@@ -463,38 +433,46 @@ function GroupHeader({ g, count, small }) {
     </div>
   );
 }
-function CardTile({ c, i, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard, openAdd, setIntensity }) {
+function CardTile({ c, i, count, addOne, removeOne, editId, editName, setEditId, setEditName, saveName, deleteCard, rotateCard, setIntensity }) {
   const lvl = c.intensity || 2;
   return (
-    <div className="rounded-2xl overflow-hidden relative pop" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)", animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-      <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative", overflow: "hidden" }}>
-        <img src={c.src} alt={c.name} loading="lazy" className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
-        <button onClick={() => rotateCard(c.id)} aria-label="Rotate" className="press absolute top-2 left-2 p-2 rounded-full" style={{ background: "rgba(20,22,15,.5)", color: "#fff", backdropFilter: "blur(4px)" }}><RotateCw size={13} /></button>
-        <button onClick={() => openAdd(c.id)} aria-label="Add to circuit" className="press absolute top-2 right-2 p-2.5 rounded-full" style={{ background: C.coral, color: "#fff", boxShadow: "0 2px 10px rgba(207,106,76,.55)" }}><Plus size={16} /></button>
-      </div>
+    <div className="rounded-2xl overflow-hidden relative pop" style={{ background: C.card, border: `1px solid ${count > 0 ? C.coral : C.line}`, boxShadow: "0 4px 18px rgba(40,38,30,.07)", animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+      <button onClick={() => addOne(c.id)} className="press block w-full" style={{ position: "relative" }}>
+        <div style={{ aspectRatio: "62/95", background: "#efe9dd", position: "relative", overflow: "hidden" }}>
+          <img src={c.src} alt={c.name} loading="lazy" className="w-full h-full object-cover" style={{ transform: c.rot ? `rotate(${c.rot}deg)` : undefined }} />
+          {c.num != null && <span className="cz absolute top-1.5 left-1.5 text-[11px] px-1.5 py-0.5 rounded-md" style={{ background: "rgba(20,22,15,.6)", color: "#fff" }}>{c.num}</span>}
+          <span className="absolute top-1.5 right-1.5 rounded-full p-1.5" style={{ background: C.coral, boxShadow: "0 2px 8px rgba(207,106,76,.5)" }}><Plus size={14} color="#fff" /></span>
+          {count > 0 && <span className="absolute bottom-1.5 right-1.5 rounded-full text-[11px] font-bold px-2 py-0.5" style={{ background: "#fff", color: C.coralDeep, boxShadow: "0 1px 5px rgba(0,0,0,.25)" }}>×{count}</span>}
+        </div>
+      </button>
       {editId === c.id ? (
         <div className="p-2">
           <div className="flex items-center gap-1.5 mb-2">
             <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveName(c.id)} className="w-full text-sm px-2 py-1 rounded-lg outline-none" style={{ border: `1px solid ${C.coral}`, background: "#fff", color: C.ink }} />
-            <button onClick={() => saveName(c.id)} aria-label="Save name" className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
-            <button onClick={() => deleteCard(c.id)} aria-label="Delete card" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.coralDeep }}><Trash2 size={14} /></button>
+            <button onClick={() => saveName(c.id)} aria-label="Save" className="press p-1.5 rounded-lg" style={{ background: C.coral, color: "#fff" }}><Check size={14} /></button>
           </div>
-          <div className="flex items-center justify-center gap-2 pb-1">
-            <span className="text-[10px] uppercase tracking-wide" style={{ color: C.faint }}>Level</span>
-            {[1, 2, 3].map((l) => (
-              <button key={l} onClick={() => setIntensity(c.id, l)} aria-label={`Intensity ${l}`} className="press" style={{ width: 15, height: 15, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />
-            ))}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: C.faint }}>Level</span>
+              {[1, 2, 3].map((l) => (<button key={l} onClick={() => setIntensity(c.id, l)} aria-label={`Level ${l}`} className="press" style={{ width: 14, height: 14, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />))}
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => rotateCard(c.id)} aria-label="Rotate" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.ink }}><RotateCw size={14} /></button>
+              <button onClick={() => deleteCard(c.id)} aria-label="Delete" className="press p-1.5 rounded-lg" style={{ background: "#eadfce", color: C.coralDeep }}><Trash2 size={14} /></button>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="px-2.5 py-2">
-          <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="w-full flex items-center justify-center gap-1.5">
-            <span className="cz text-[12px] text-center truncate" style={{ letterSpacing: "0.03em", color: C.ink }}>{c.name}</span>
-            <Pencil size={11} style={{ color: C.faint, flexShrink: 0 }} />
+        <div className="px-2 py-1.5 flex items-center justify-between gap-1">
+          <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="flex items-center gap-1 min-w-0">
+            <span className="cz text-[11.5px] truncate" style={{ letterSpacing: "0.02em", color: C.ink }}>{c.name}</span>
+            <Pencil size={10} style={{ color: C.faint, flexShrink: 0 }} />
           </button>
-          <div className="flex items-center justify-center gap-1 mt-1.5">
-            {[1, 2, 3].map((l) => (<span key={l} style={{ width: 5, height: 5, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />))}
-          </div>
+          {count > 0 ? (
+            <button onClick={() => removeOne(c.id)} aria-label="Remove one" className="press flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-sm font-bold" style={{ background: "#eadfce", color: C.coralDeep }}>−</button>
+          ) : (
+            <div className="flex items-center gap-0.5 flex-shrink-0">{[1, 2, 3].map((l) => (<span key={l} style={{ width: 4, height: 4, borderRadius: 99, background: lvl >= l ? C.coral : "#e0d6c4" }} />))}</div>
+          )}
         </div>
       )}
     </div>
