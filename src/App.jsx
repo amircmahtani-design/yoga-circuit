@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
   ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check, RotateCw,
-  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2, Sparkles
+  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2, Sparkles, Bookmark
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
 
@@ -89,6 +89,9 @@ export default function App() {
   const [genBase, setGenBase] = useState("balanced");
   const [genCount, setGenCount] = useState(8);
   const [genRest, setGenRest] = useState(0);
+  const [saved, setSaved] = useState([]);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -113,8 +116,16 @@ export default function App() {
         patched = true; return { ...c, intensity: hit ? hit.lvl : 2 };
       });
       if (patched) await persistLibrary(cards);
+      let gsync = false;
+      cards = cards.map((c) => {
+        const d = DECK.find((dd) => typeof c.src === "string" && c.src.indexOf(dd.img) !== -1);
+        if (d && c.group !== d.group) { gsync = true; return { ...c, group: d.group }; }
+        return c;
+      });
+      if (gsync) await persistLibrary(cards);
       setLibrary(cards);
       const sc = await store.get("yoga:circuit"); if (sc) setCircuit(sc);
+      const sv = await store.get("yoga:saved"); if (sv) setSaved(sv);
       setLoading(false);
     })();
   }, []);
@@ -136,6 +147,7 @@ export default function App() {
   }
   useEffect(() => { if (!loading) store.set("yoga:circuit", circuit); }, [circuit, loading]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1600); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => { if (!loading) store.set("yoga:saved", saved); }, [saved, loading]);
 
   function addFiles(files) { const arr = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, 90); if (arr.length) setQueue(arr); }
   function commitCards(cards) {
@@ -151,6 +163,27 @@ export default function App() {
   const countOf = (id) => circuit.reduce((n, x) => n + (x.cardId === id ? 1 : 0), 0);
   function addOne(id) { const card = cardOf(id); setCircuit((c) => [...c, { iid: uid(), cardId: id, duration: holdDefault }]); if (card) setToast(card.name + " added"); }
   function removeOne(id) { setCircuit((c) => { for (let k = c.length - 1; k >= 0; k--) { if (c[k].cardId === id) { const n = [...c]; n.splice(k, 1); return n; } } return c; }); }
+  function saveCircuit(name) {
+    if (!circuit.length) return;
+    const nm = (((name || "").trim()) || ("Workout " + (saved.length + 1))).slice(0, 40);
+    const items = circuit.map((x) => { const c = cardOf(x.cardId); return { cardId: x.cardId, num: c ? c.num : null, name: c ? c.name : "", duration: x.duration }; });
+    setSaved((s) => [{ id: uid(), name: nm, items, rest: restDur, createdAt: Date.now() }, ...s]);
+    setToast("Saved");
+  }
+  function loadSaved(it) {
+    const resolve = (x) => {
+      let card = null;
+      if (x.num != null) card = library.find((c) => c.num === x.num);
+      if (!card && x.name) card = library.find((c) => c.name === x.name);
+      if (!card) card = library.find((c) => c.id === x.cardId);
+      return card;
+    };
+    const items = it.items.map((x) => { const card = resolve(x); return card ? { iid: uid(), cardId: card.id, duration: x.duration } : null; }).filter(Boolean);
+    setCircuit(items);
+    if (it.rest != null) setRestDur(it.rest);
+    setSavedOpen(false); setTab("build"); setToast("Loaded " + it.name);
+  }
+  function deleteSaved(id) { setSaved((s) => s.filter((x) => x.id !== id)); }
   function setIntensity(id, lvl) { const next = library.map((c) => (c.id === id ? { ...c, intensity: lvl } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
   function openGen() { setGenRest(restDur); setGenOpen(true); }
   function doGenerate(mode) {
@@ -205,7 +238,7 @@ export default function App() {
       <style>{STYLE}</style>
       <div className="yc min-h-screen relative" style={{ background: `radial-gradient(120% 80% at 50% -10%, ${C.bg} 0%, ${C.bg2} 100%)`, color: C.ink, paddingBottom: showStart ? 168 : 104 }}>
         <div style={{ position: "fixed", inset: 0, pointerEvents: "none", opacity: 0.05, backgroundImage: GRAIN, mixBlendMode: "multiply" }} />
-        <div className="max-w-2xl mx-auto px-5 relative">
+        <div className="max-w-2xl lg:max-w-4xl mx-auto px-5 sm:px-8 relative">
           {/* header */}
           <header className="pt-8 pb-5 flex items-center justify-between fadeUp">
             <div className="flex items-center gap-3">
@@ -284,7 +317,7 @@ export default function App() {
 
               <FilterChips groups={presentGroups} value={filter} onChange={setFilter} cardsIn={cardsIn} />
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 mt-1">
                 {(filter ? library.filter((c) => c.group === filter) : library.slice()).sort((a, b) => (a.num || 999) - (b.num || 999)).map((c, i) => (
                   <CardTile key={c.id} c={c} i={i} count={countOf(c.id)} addOne={addOne} removeOne={removeOne} editId={editId} editName={editName} setEditId={setEditId} setEditName={setEditName} saveName={saveName} deleteCard={deleteCard} rotateCard={rotateCard} setIntensity={setIntensity} />
                 ))}
@@ -297,7 +330,8 @@ export default function App() {
             <section className="fadeUp">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="cz text-2xl" style={titleStyle}>Your circuit</h2>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setSavedOpen(true)} aria-label="Saved workouts" className="press h-9 w-9 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}><Bookmark size={16} /></button>
                   <button onClick={openGen} className="press h-9 px-3.5 rounded-full text-sm font-semibold flex items-center gap-1.5" style={{ background: C.coral, color: "#fff", boxShadow: "0 4px 12px rgba(207,106,76,.35)" }}><Sparkles size={15} /> Create</button>
                   {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear</button>}
                 </div>
@@ -367,6 +401,40 @@ export default function App() {
         {/* one-tap add — no modal */}
 
         {toast && (<div className="fixed left-1/2 z-[80] px-4 py-2.5 rounded-full text-sm font-semibold fadeUp" style={{ bottom: 96, transform: "translateX(-50%)", background: C.ink, color: "#fff", boxShadow: "0 8px 24px rgba(0,0,0,.3)" }}>{toast} ✓</div>)}
+
+        {savedOpen && (
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: "rgba(20,22,15,.55)" }} onClick={() => setSavedOpen(false)}>
+            <div className="w-full max-w-sm m-3 rounded-3xl p-5 fadeUp" style={{ background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,.4)", maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+              <div className="cz text-xl mb-3" style={{ color: C.ink }}>Saved workouts</div>
+              {circuit.length > 0 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this workout" className="flex-1 h-10 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }} />
+                  <button onClick={() => { saveCircuit(saveName); setSaveName(""); }} className="press h-10 px-4 rounded-xl text-sm font-bold" style={{ background: C.coral, color: "#fff" }}>Save</button>
+                </div>
+              )}
+              {saved.length === 0 ? (
+                <p className="text-sm text-center py-6" style={{ color: C.faint }}>No saved workouts yet. Build a circuit, then save it here.</p>
+              ) : (
+                <div className="space-y-2">
+                  {saved.map((it) => {
+                    const total = it.items.reduce((a, x) => a + (x.duration || holdDefault), 0);
+                    return (
+                      <div key={it.id} className="rounded-2xl p-3 flex items-center gap-3" style={{ background: "#f6f0e4", border: `1px solid ${C.line}` }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="cz text-sm truncate" style={{ color: C.ink }}>{it.name}</div>
+                          <div className="text-xs" style={{ color: C.sub }}>{it.items.length} poses · {fmt(total)}</div>
+                        </div>
+                        <button onClick={() => loadSaved(it)} className="press h-9 px-4 rounded-full text-xs font-bold" style={{ background: C.coral, color: "#fff" }}>Load</button>
+                        <button onClick={() => deleteSaved(it.id)} aria-label="Delete" className="press p-2" style={{ color: C.coralDeep }}><Trash2 size={15} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <button onClick={() => setSavedOpen(false)} className="press w-full h-11 mt-3 rounded-full font-semibold" style={{ background: "transparent", color: C.sub }}>Close</button>
+            </div>
+          </div>
+        )}
 
         {genOpen && (
           <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: "rgba(20,22,15,.55)" }} onClick={() => setGenOpen(false)}>
@@ -634,18 +702,18 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
         </div>))}
       </div>
       <div className="relative flex-1 flex items-center justify-center px-6 py-5 min-h-0">
-        <div key={pl.index} className="pop relative h-full w-full max-w-xs flex items-center justify-center">
+        <div key={pl.index} className="pop relative h-full w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg flex items-center justify-center">
           <img src={cur.card.src} alt={cur.card.name} className="max-h-full max-w-full object-contain rounded-[22px]" style={{ boxShadow: "0 20px 60px rgba(0,0,0,.55)", opacity: isRest ? 0.3 : 1, transition: "opacity .35s", transform: cur.card.rot ? `rotate(${cur.card.rot}deg)` : undefined }} />
           {isRest && (<div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
             <span className="text-xs tracking-[0.35em] uppercase mb-2" style={{ color: "#aebfac" }}>Rest · next up</span>
-            <span className="cz text-2xl" style={{ letterSpacing: "0.04em" }}>{next ? next.card.name : ""}</span>
+            <span className="cz text-2xl md:text-4xl" style={{ letterSpacing: "0.04em" }}>{next ? next.card.name : ""}</span>
           </div>)}
         </div>
       </div>
       <div className="relative px-7 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[11px] tracking-[0.25em] uppercase mb-1" style={{ color: "#a59c8e" }}>{isRest ? "Breathe" : "Now"}</div>
-          <div className="cz text-xl truncate leading-tight" style={{ letterSpacing: "0.03em" }}>{cur.card.name}</div>
+          <div className="cz text-xl md:text-3xl truncate leading-tight" style={{ letterSpacing: "0.03em" }}>{cur.card.name}</div>
           {!isRest && (next ? <div className="text-sm mt-1 truncate flex items-center gap-1.5" style={{ color: "#a59c8e" }}><ChevronRight size={14} /> {next.card.name}</div> : <div className="text-sm mt-1" style={{ color: "#a59c8e" }}>Final pose</div>)}
         </div>
         <div className="relative flex-shrink-0" style={{ width: 116, height: 116 }}>
@@ -655,7 +723,7 @@ function Player({ circuit, library, holdDefault, restDur, soundOn, voiceOn, voic
             <circle cx="58" cy="58" r={R} fill="none" stroke="url(#ring)" strokeWidth="7" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - frac)} style={{ transition: "stroke-dashoffset .12s linear" }} />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="cz text-4xl tabular-nums leading-none">{Math.ceil(pl.remaining)}</span>
+            <span className="cz text-4xl md:text-6xl tabular-nums leading-none">{Math.ceil(pl.remaining)}</span>
             <span className="text-[10px] mt-1" style={{ color: "#a59c8e" }}>sec</span>
           </div>
         </div>
