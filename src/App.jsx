@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Trash2, Play, Pause, ChevronLeft, ChevronRight, X, RotateCcw,
   ArrowUp, ArrowDown, Volume2, VolumeX, Upload, Pencil, Check, RotateCw,
-  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2, Sparkles, Bookmark
+  Flower2, LayoutGrid, ListChecks, Clock, Wind, Flame, Minus, Megaphone, Settings2, Sparkles, Bookmark, Save
 } from "lucide-react";
 import { GROUPS, DECK } from "./deck.js";
 
@@ -70,6 +70,9 @@ function bestVoice(list) {
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("build");
+  const scrollMem = useRef({});
+  const goTab = useCallback((next) => { scrollMem.current[tab] = window.scrollY; setTab(next); }, [tab]);
+  useEffect(() => { const y = scrollMem.current[tab] || 0; const id = requestAnimationFrame(() => window.scrollTo(0, y)); return () => cancelAnimationFrame(id); }, [tab]);
   const [library, setLibrary] = useState([]);
   const [circuit, setCircuit] = useState([]);
   const [holdDefault, setHoldDefault] = useState(30);
@@ -91,7 +94,7 @@ export default function App() {
   const [genRest, setGenRest] = useState(0);
   const [saved, setSaved] = useState([]);
   const [savedOpen, setSavedOpen] = useState(false);
-  const [saveName, setSaveName] = useState("");
+  const [workoutName, setWorkoutName] = useState("");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -181,7 +184,7 @@ export default function App() {
     const items = it.items.map((x) => { const card = resolve(x); return card ? { iid: uid(), cardId: card.id, duration: x.duration } : null; }).filter(Boolean);
     setCircuit(items);
     if (it.rest != null) setRestDur(it.rest);
-    setSavedOpen(false); setTab("build"); setToast("Loaded " + it.name);
+    setSavedOpen(false); goTab("build"); setToast("Loaded " + it.name);
   }
   function deleteSaved(id) { setSaved((s) => s.filter((x) => x.id !== id)); }
   function setIntensity(id, lvl) { const next = library.map((c) => (c.id === id ? { ...c, intensity: lvl } : c)); setLibrary(next); const card = next.find((c) => c.id === id); if (card) store.set("yoga:card:" + id, card); }
@@ -332,7 +335,9 @@ export default function App() {
                 <h2 className="cz text-2xl" style={titleStyle}>Your circuit</h2>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setSavedOpen(true)} aria-label="Saved workouts" className="press h-9 w-9 rounded-full flex items-center justify-center" style={{ background: "#f1ebdd", color: C.sub, border: `1px solid ${C.line}` }}><Bookmark size={16} /></button>
-                  <button onClick={openGen} className="press h-9 px-3.5 rounded-full text-sm font-semibold flex items-center gap-1.5" style={{ background: C.coral, color: "#fff", boxShadow: "0 4px 12px rgba(207,106,76,.35)" }}><Sparkles size={15} /> Create</button>
+                  {circuit.length > 0 && (
+                    <button onClick={() => saveCircuit()} className="press h-9 px-3.5 rounded-full text-sm font-semibold flex items-center gap-1.5" style={{ background: C.coral, color: "#fff", boxShadow: "0 4px 12px rgba(207,106,76,.35)" }}><Save size={15} /> Save</button>
+                  )}
                   {circuit.length > 0 && <button onClick={() => setCircuit([])} className="text-xs press" style={{ color: C.sub }}>Clear</button>}
                 </div>
               </div>
@@ -343,7 +348,7 @@ export default function App() {
                   <p className="text-sm mb-4" style={{ color: C.sub }}>Your circuit is empty.</p>
                   <div className="flex flex-col items-center gap-2.5">
                     <button onClick={openGen} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-bold" style={{ background: C.coral, color: "#fff" }}><Sparkles size={16} /> Create a workout</button>
-                    <button onClick={() => setTab("cards")} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-semibold" style={{ background: "#eadfce", color: C.ink }}><LayoutGrid size={16} /> Add poses from Cards</button>
+                    <button onClick={() => goTab("cards")} className="press h-11 px-5 rounded-full inline-flex items-center gap-2 text-sm font-semibold" style={{ background: "#eadfce", color: C.ink }}><LayoutGrid size={16} /> Add poses from Cards</button>
                   </div>
                 </div>
               ) : (
@@ -390,7 +395,7 @@ export default function App() {
         <nav className="fixed inset-x-0 bottom-0 px-5 pb-4 pt-2" style={{ background: `linear-gradient(to top, ${C.bg2} 65%, transparent)` }}>
           <div className="max-w-2xl mx-auto rounded-full p-1.5 flex gap-1" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 6px 24px rgba(40,38,30,.13)" }}>
             {[["build", "Circuit", <ListChecks size={18} key="b" />], ["cards", "Cards", <LayoutGrid size={18} key="a" />]].map(([k, label, icon]) => (
-              <button key={k} onClick={() => setTab(k)} className="press flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-sm font-semibold transition-colors" style={tab === k ? { background: C.coral, color: "#fff" } : { color: C.sub }}>
+              <button key={k} onClick={() => goTab(k)} className="press flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-sm font-semibold transition-colors" style={tab === k ? { background: C.coral, color: "#fff" } : { color: C.sub }}>
                 {icon}{label}{k === "build" && circuit.length > 0 ? <span className="text-xs rounded-full px-1.5 py-0.5" style={{ background: tab === k ? "rgba(255,255,255,.22)" : "rgba(207,106,76,.13)", color: tab === k ? "#fff" : C.coralDeep }}>{circuit.length}</span> : null}
               </button>
             ))}
@@ -408,8 +413,8 @@ export default function App() {
               <div className="cz text-xl mb-3" style={{ color: C.ink }}>Saved workouts</div>
               {circuit.length > 0 && (
                 <div className="flex items-center gap-2 mb-4">
-                  <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this workout" className="flex-1 h-10 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }} />
-                  <button onClick={() => { saveCircuit(saveName); setSaveName(""); }} className="press h-10 px-4 rounded-xl text-sm font-bold" style={{ background: C.coral, color: "#fff" }}>Save</button>
+                  <input value={workoutName} onChange={(e) => setWorkoutName(e.target.value)} placeholder="Name this workout" className="flex-1 h-10 px-3 rounded-xl text-sm outline-none" style={{ background: "#f1ebdd", color: C.ink, border: `1px solid ${C.line}` }} />
+                  <button onClick={() => { saveCircuit(workoutName); setWorkoutName(""); }} className="press h-10 px-4 rounded-xl text-sm font-bold" style={{ background: C.coral, color: "#fff" }}>Save</button>
                 </div>
               )}
               {saved.length === 0 ? (
